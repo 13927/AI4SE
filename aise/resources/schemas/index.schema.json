@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "index.schema.json",
+  "title": "CodeWiki L1 Index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "version", "modules", "apis", "flows", "playbooks"],
+  "properties": {
+    "kind": { "const": "index" },
+    "version": { "type": "string", "minLength": 1 },
+    "modules": { "type": "array", "items": { "type": "string" } },
+    "apis": { "type": "array", "items": { "type": "string" } },
+    "flows": { "type": "array", "items": { "type": "string" } },
+    "playbooks": { "type": "array", "items": { "type": "string" } },
+    "relations": { "type": "array", "items": { "type": "string" } }
+  }
+}

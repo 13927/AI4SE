@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "relations.schema.json",
+  "title": "CodeWiki L1 Relations",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "id", "name", "summary", "edges", "provenance"],
+  "properties": {
+    "kind": { "const": "relations" },
+    "id": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "summary": { "type": "string", "minLength": 1 },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from_module", "to_module", "type", "weight"],
+        "properties": {
+          "from_module": { "type": "string", "minLength": 1 },
+          "to_module": { "type": "string", "minLength": 1 },
+          "type": { "type": "string", "enum": ["inject", "call", "include", "build", "other"] },
+          "weight": { "type": "integer", "minimum": 1 },
+          "evidence": {
+            "type": "array",
+            "items": { "$ref": "common.schema.json#/$defs/sourceRef" }
+          }
+        }
+      }
+    },
+    "provenance": { "$ref": "common.schema.json#/$defs/sourcesBlock" }
+  }
+}

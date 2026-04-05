@@ -1,0 +1,70 @@
+name: codewiki
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: ["main", "master"]
+  pull_request: {}
+  schedule:
+    - cron: "0 2 * * *"
+
+jobs:
+  codewiki:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install aise
+        run: |
+          python -m pip install -U pip
+          # 方案 A（推荐）：从 PyPI 安装（发布后使用）
+          # python -m pip install "aise==0.0.1"
+          # 方案 B：从源码安装（把 aise 作为 submodule 或直接复制进仓库）
+          # python -m pip install -e ./aise
+          #
+          # 当前模板默认安装最新版本（你也可以 pin 版本）
+          python -m pip install aise
+
+      - name: Generate/Update CodeWiki
+        run: |
+          aise init --command-name aise
+          aise scan
+
+      - name: Validate (static)
+        run: |
+          aise validate --mode static --format text
+
+      - name: Validate (diff gate for PR)
+        if: github.event_name == 'pull_request'
+        run: |
+          aise validate --mode diff --base origin/${{ github.base_ref }} --head HEAD --format text
+
+      # 自动开 PR：仅当 docs/codewiki 有变更时
+      - name: Create Pull Request (CodeWiki updates)
+        if: github.event_name != 'pull_request'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore(codewiki): update docs/codewiki"
+          title: "chore(codewiki): update docs/codewiki"
+          body: |
+            本 PR 由 GitHub Actions 自动生成：
+            - 运行 `aise scan` 生成/更新 `docs/codewiki/`
+            - 通过 `aise validate --mode static`
+            
+            建议 review 重点：
+            - L1/modules 的 boundaries/side_effects/invariants 是否需要人工补齐
+            - views/filetree 与 entrypoints 是否需要更精细规则
+          branch: "bot/codewiki"
+          delete-branch: true
+          add-paths: |
+            docs/codewiki/**
+          labels: |
+            codewiki

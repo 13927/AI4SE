@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "views-module-symbols.schema.json",
+  "title": "CodeWiki views/module_symbols",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "version", "root", "modules"],
+  "properties": {
+    "kind": { "const": "view.module_symbols" },
+    "version": { "type": "string", "minLength": 1 },
+    "root": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string" },
+    "modules": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9_-]*(/[a-z0-9][a-z0-9_-]*)*$": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["classes_truncated", "classes"],
+          "properties": {
+            "classes_truncated": { "type": "boolean" },
+            "classes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "file"],
+                "properties": {
+                  "name": { "type": "string", "minLength": 1 },
+                  "package": { "type": "string" },
+                  "stereotype": {
+                    "type": "string",
+                    "enum": ["controller", "service", "repository", "component", "entity", "dto", "test", "other"]
+                  },
+                  "file": { "type": "string", "minLength": 1 }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

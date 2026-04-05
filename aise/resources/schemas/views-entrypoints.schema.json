@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "views-entrypoints.schema.json",
+  "title": "CodeWiki View: Entrypoints",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "version", "entrypoints"],
+  "properties": {
+    "kind": { "const": "view.entrypoints" },
+    "version": { "type": "string", "minLength": 1 },
+    "entrypoints": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "match", "targets"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "type": {
+            "type": "string",
+            "enum": ["cli", "http_route", "worker", "cron", "event", "other"]
+          },
+          "match": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "value"],
+            "properties": {
+              "kind": { "type": "string", "enum": ["literal", "glob", "regex"] },
+              "value": { "type": "string", "minLength": 1 }
+            }
+          },
+          "summary": { "type": "string" },
+          "targets": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["modules"],
+            "properties": {
+              "modules": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9_-]*(/[a-z0-9][a-z0-9_-]*)*$"
+                }
+              },
+              "flows": { "type": "array", "items": { "type": "string" } },
+              "apis": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "source": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "ref"],
+            "properties": {
+              "kind": { "type": "string", "enum": ["file", "symbol", "doc", "other"] },
+              "ref": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    }
+  }
+}

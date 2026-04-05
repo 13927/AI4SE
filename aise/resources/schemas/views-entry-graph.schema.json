@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "views-entry-graph.schema.json",
+  "title": "CodeWiki View: Entry Graph",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "version", "nodes", "edges"],
+  "properties": {
+    "kind": { "const": "view.entry_graph" },
+    "version": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string" },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "kind": { "type": "string", "enum": ["route", "class", "symbol", "file", "module", "other"] },
+          "label": { "type": "string" },
+          "module": { "type": "string" },
+          "meta": { "type": "object" }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "to", "type"],
+        "properties": {
+          "from": { "type": "string", "minLength": 1 },
+          "to": { "type": "string", "minLength": 1 },
+          "type": { "type": "string", "enum": ["route_to_handler", "inject", "call", "other"] },
+          "evidence": {
+            "type": "array",
+            "items": { "$ref": "common.schema.json#/$defs/sourceRef" }
+          }
+        }
+      }
+    }
+  }
+}
+

@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "common.schema.json",
+  "title": "CodeWiki Common Types",
+  "type": "object",
+  "$defs": {
+    "confidence": {
+      "type": "string",
+      "enum": ["high", "medium", "low"],
+      "description": "对该条目内容正确性的主观置信度。low 表示 agent 应倾向升级权限或请求人工确认。"
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ref"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["file", "symbol", "command", "url", "doc", "commit"],
+          "description": "来源类型：文件/符号/命令输出/链接/文档/提交等"
+        },
+        "ref": { "type": "string", "minLength": 1 },
+        "note": { "type": "string" }
+      }
+    },
+    "sourcesBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sources", "last_verified_commit", "confidence"],
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sourceRef" },
+          "minItems": 1
+        },
+        "last_verified_commit": { "type": "string", "minLength": 1 },
+        "confidence": { "$ref": "#/$defs/confidence" }
+      }
+    },
+    "boundaryRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "statement"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["must", "must_not", "should", "should_not", "allowed"]
+        },
+        "statement": { "type": "string", "minLength": 1 },
+        "machine": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "forbid_dependency",
+                "require_dependency",
+                "forbid_write_path",
+                "allow_write_path",
+                "require_human_approval",
+                "require_readonly_deep_read"
+              ]
+            },
+            "targets": { "type": "array", "items": { "type": "string" } },
+            "note": { "type": "string" }
+          }
+        },
+        "rationale": { "type": "string" }
+      }
+    },
+    "sideEffect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "summary"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "file_write",
+            "db_write",
+            "network_call",
+            "process_spawn",
+            "cache_mutation",
+            "message_publish",
+            "other"
+          ]
+        },
+        "summary": { "type": "string", "minLength": 1 },
+        "targets": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

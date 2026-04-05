@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "playbook.schema.json",
+  "title": "CodeWiki L1 Playbook",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "id", "name", "summary", "steps", "verifications", "provenance"],
+  "properties": {
+    "kind": { "const": "playbook" },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9-]*(/[a-z0-9][a-z0-9-]*)*$"
+    },
+    "name": { "type": "string", "minLength": 1 },
+    "summary": { "type": "string", "minLength": 1 },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "verifications": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "related_modules": { "type": "array", "items": { "type": "string" } },
+    "provenance": { "$ref": "common.schema.json#/$defs/sourcesBlock" }
+  }
+}
+

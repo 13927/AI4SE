@@ -1,0 +1,79 @@
+name: aise-selftest
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 3 * * *" # daily 03:00 UTC
+  push:
+    paths:
+      - "**"
+      - ".github/workflows/selftest.yml"
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install aise (editable)
+        run: |
+          python -m pip install -U pip
+          python -m pip install -e ".[dev]"
+
+      - name: Run unit tests (pytest)
+        run: |
+          pytest -q
+
+      - name: Wiki 0-placeholder gate (default)
+        run: |
+          rm -rf /tmp/aise-wiki-gate && mkdir -p /tmp/aise-wiki-gate
+          cd /tmp/aise-wiki-gate
+          git init
+          git config user.email "ci@example.com"
+          git config user.name "ci"
+          python - <<'PY'
+          from pathlib import Path
+          Path("src").mkdir()
+          Path("src/app.txt").write_text("x", encoding="utf-8")
+          PY
+          git add . && git commit -m "init"
+          aise init --command-name app
+          aise scan
+          aise fill --no-llm
+          aise export --out docs/codewiki/WIKI.md --strict
+
+      - name: Run selftest (no API key)
+        run: |
+          aise selftest --workdir /tmp/aise-selftest
+
+      - name: Agent integration (optional, requires secrets)
+        if: ${{ secrets.AISE_OPENAI_API_KEY != '' }}
+        env:
+          AISE_OPENAI_BASE_URL: ${{ secrets.AISE_OPENAI_BASE_URL }}
+          AISE_OPENAI_API_KEY: ${{ secrets.AISE_OPENAI_API_KEY }}
+          AISE_OPENAI_MODEL: ${{ secrets.AISE_OPENAI_MODEL }}
+        run: |
+          rm -rf /tmp/aise-agent-demo && mkdir -p /tmp/aise-agent-demo
+          cd /tmp/aise-agent-demo
+          git init
+          git config user.email "ci@example.com"
+          git config user.name "ci"
+          # 最小 repo：需要 codewiki 存在且允许 run_verify 执行 aise validate
+          cat > aise.yml <<'YAML'
+          readScopes:
+            - docs/codewiki/**
+          writeScopes:
+            - docs/codewiki/**
+          verifyAllowlist:
+            - aise validate
+          YAML
+          python -c "from pathlib import Path; Path('src').mkdir(); Path('src/app.txt').write_text('x')"
+          git add . && git commit -m "init"
+          aise init --command-name app
+          aise scan
+          aise agent-run --repo . --scenario "/sessions/69cde7489eb8f73ea00c6ce3/workspace/aise/tests/fixtures/agent_integration_scenario.json"

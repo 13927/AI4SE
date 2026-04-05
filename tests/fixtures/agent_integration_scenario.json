@@ -1,0 +1,7 @@
+{
+  "task": "你正在 CI 的非交互模式下运行。请严格按顺序执行：\n1) 先 codewiki_validate。\n2) 提交 submit_plan（plan.success_criteria 必须包含：validate 通过、写入仅限 docs/codewiki/**）。\n3) 使用 propose_patch + git_apply_patch，在 docs/codewiki/L2/modules/core.md 末尾追加一行：integration-ok。\n4) 使用 run_verify 执行：aise validate --mode static --format text。\n5) 最后用一句话输出：integration ok。\n注意：不要 request_upgrade，不要读源码文件。\n",
+  "approvals": {
+    "allow_upgrade": false
+  }
+}
+

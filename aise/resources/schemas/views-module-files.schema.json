@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "views-module-files.schema.json",
+  "title": "CodeWiki views/module_files",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "version", "root", "modules"],
+  "properties": {
+    "kind": { "const": "view.module_files" },
+    "version": { "type": "string", "minLength": 1 },
+    "root": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string" },
+    "total_files": { "type": "integer", "minimum": 0 },
+    "unmapped_count": { "type": "integer", "minimum": 0 },
+    "modules": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9_-]*(/[a-z0-9][a-z0-9_-]*)*$": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["count", "files_truncated", "files", "counts_by_ext"],
+          "properties": {
+            "count": { "type": "integer", "minimum": 0 },
+            "files_truncated": { "type": "boolean" },
+            "files": { "type": "array", "items": { "type": "string" } },
+            "counts_by_ext": {
+              "type": "object",
+              "additionalProperties": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    "unmapped_files": { "type": "array", "items": { "type": "string" } }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "flow.schema.json",
+  "title": "CodeWiki L1 Flow",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "id", "name", "summary", "stages", "provenance"],
+  "properties": {
+    "kind": { "const": "flow" },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9-]*(/[a-z0-9][a-z0-9-]*)*$"
+    },
+    "name": { "type": "string", "minLength": 1 },
+    "summary": { "type": "string", "minLength": 1 },
+    "stages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "summary"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "summary": { "type": "string", "minLength": 1 },
+          "modules": { "type": "array", "items": { "type": "string" } },
+          "apis": { "type": "array", "items": { "type": "string" } },
+          "evidence": {
+            "type": "array",
+            "items": { "$ref": "common.schema.json#/$defs/sourceRef" },
+            "description": "关系证据：用于把 flow 从“叙事”升级为“可追溯”。ref 建议包含 file:line 或 symbol 线索。"
+          }
+        }
+      }
+    },
+    "provenance": { "$ref": "common.schema.json#/$defs/sourcesBlock" }
+  }
+}

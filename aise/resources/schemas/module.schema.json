@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "module.schema.json",
+  "title": "CodeWiki L1 Module",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "id",
+    "name",
+    "responsibility",
+    "boundaries",
+    "dependencies",
+    "public_interfaces",
+    "side_effects",
+    "invariants",
+    "provenance"
+  ],
+  "properties": {
+    "kind": { "const": "module" },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9_-]*(/[a-z0-9][a-z0-9_-]*)*$"
+    },
+    "name": { "type": "string", "minLength": 1 },
+    "module_kind": {
+      "type": "string",
+      "enum": ["code", "build", "external", "unknown"],
+      "description": "模块类型（与 record.kind=module 区分）。用于分层治理与校验。"
+    },
+    "layer": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9_-]*(/[a-z0-9][a-z0-9_-]*)*$",
+      "description": "架构层级（允许自定义层级树：用 / 分层）。例如 domain、application、presentation/web、domain/owner 等。"
+    },
+    "responsibility": { "type": "string", "minLength": 1 },
+    "entrypoints": { "type": "array", "items": { "type": "string" } },
+    "boundaries": {
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/boundaryRule" },
+      "minItems": 1
+    },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["depends_on"],
+      "properties": {
+        "depends_on": { "type": "array", "items": { "type": "string" } },
+        "depended_by": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "public_interfaces": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "id"],
+        "properties": {
+          "kind": { "type": "string", "enum": ["api", "cli", "event", "file", "other"] },
+          "id": { "type": "string", "minLength": 1 },
+          "summary": { "type": "string" }
+        }
+      }
+    },
+    "side_effects": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/sideEffect" } },
+    "invariants": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "related": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "flows": { "type": "array", "items": { "type": "string" } },
+        "playbooks": { "type": "array", "items": { "type": "string" } },
+        "docs_l2": { "type": "string" }
+      }
+    },
+    "provenance": { "$ref": "common.schema.json#/$defs/sourcesBlock" }
+  }
+}
