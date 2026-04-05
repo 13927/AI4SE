@@ -2,7 +2,7 @@
 
 > 一句话：把大型代码仓库“自动整理成可校验的 Wiki”，让人和 Agent 都能更快理解、定位、改动与验证。
 
-![CI](https://github.com/<owner>/<repo>/actions/workflows/selftest.yml/badge.svg)
+![CI](https://github.com/13927/AI4SE/actions/workflows/selftest.yml/badge.svg)
 
 ## 这是什么
 
