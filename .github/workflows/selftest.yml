@@ -12,6 +12,11 @@ on:
 jobs:
   selftest:
     runs-on: ubuntu-latest
+    env:
+      # secrets 不能在 if: 表达式中直接引用；先映射到 env 再判断是否为空
+      AISE_OPENAI_BASE_URL: ${{ secrets.AISE_OPENAI_BASE_URL }}
+      AISE_OPENAI_API_KEY: ${{ secrets.AISE_OPENAI_API_KEY }}
+      AISE_OPENAI_MODEL: ${{ secrets.AISE_OPENAI_MODEL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,11 +57,7 @@ jobs:
           aise selftest --workdir /tmp/aise-selftest
 
       - name: Agent integration (optional, requires secrets)
-        if: ${{ secrets.AISE_OPENAI_API_KEY != '' }}
-        env:
-          AISE_OPENAI_BASE_URL: ${{ secrets.AISE_OPENAI_BASE_URL }}
-          AISE_OPENAI_API_KEY: ${{ secrets.AISE_OPENAI_API_KEY }}
-          AISE_OPENAI_MODEL: ${{ secrets.AISE_OPENAI_MODEL }}
+        if: ${{ env.AISE_OPENAI_API_KEY != '' }}
         run: |
           rm -rf /tmp/aise-agent-demo && mkdir -p /tmp/aise-agent-demo
           cd /tmp/aise-agent-demo
