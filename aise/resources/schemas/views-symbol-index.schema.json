@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "views-symbol-index.schema.json",
+  "title": "CodeWiki views/symbol_index.jsonl (per-line schema)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["symbol_id", "kind", "language", "file", "range"],
+  "properties": {
+    "symbol_id": { "type": "string", "minLength": 1 },
+    "kind": {
+      "type": "string",
+      "enum": ["function", "method", "constructor", "class", "interface", "enum", "namespace", "global_var", "const", "macro", "other"]
+    },
+    "language": { "type": "string", "enum": ["java", "cpp"] },
+    "name": { "type": "string" },
+    "qualname": { "type": "string" },
+    "signature": { "type": "string" },
+    "module": { "type": "string" },
+    "file": { "type": "string", "minLength": 1 },
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_line", "start_col", "end_line", "end_col"],
+      "properties": {
+        "start_line": { "type": "integer", "minimum": 1 },
+        "start_col": { "type": "integer", "minimum": 1 },
+        "end_line": { "type": "integer", "minimum": 1 },
+        "end_col": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}
+

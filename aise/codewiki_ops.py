@@ -28,6 +28,7 @@ from .extractors.maven import extract as extract_maven
 from .extractors.spring import extract as extract_spring
 from .extractors.java_rest import extract as extract_java_rest
 from .extractors.cpp_headers import extract as extract_cpp_headers
+from .extractors.symbol_index import extract_java_symbols, extract_cpp_symbols
 from .llm_openai import OpenAIClient, load_openai_config
 
 
@@ -87,6 +88,7 @@ def init_repo(cwd: Path, command_name: str = "app") -> None:
         "views-entry-graph.schema.json",
         "views-entrypoints.schema.json",
         "views-filetree.schema.json",
+        "views-symbol-index.schema.json",
         "views-module-files.schema.json",
         "views-module-symbols.schema.json",
         "views-java-http-routes.schema.json",
@@ -246,6 +248,7 @@ def scan_repo(cwd: Path) -> None:
         "views-entry-graph.schema.json",
         "views-entrypoints.schema.json",
         "views-filetree.schema.json",
+        "views-symbol-index.schema.json",
         "views-module-files.schema.json",
         "views-module-symbols.schema.json",
         "views-java-http-routes.schema.json",
@@ -632,6 +635,17 @@ def scan_repo(cwd: Path) -> None:
         if java_apis:
             jr_obj = _generate_java_http_routes_view(cwd=cwd, java_apis=java_apis, module_symbols_view=ms)
             write_json(root / "views/java_http_routes.json", jr_obj)
+
+        # 全仓符号索引（JSONL）
+        try:
+            recs = _generate_symbol_index_jsonl(cwd=cwd, module_files_view=mf, ignore=list(cfg.ignore or []))
+            (root / "views").mkdir(parents=True, exist_ok=True)
+            out = root / "views/symbol_index.jsonl"
+            with out.open("w", encoding="utf-8") as f:
+                for r in recs:
+                    f.write(json.dumps(r, ensure_ascii=False) + "\n")
+        except Exception as si_e:
+            (root / "views/symbol_index.error.txt").write_text(str(si_e), encoding="utf-8")
 
     try:
         _gen_views_from_filetree()
@@ -1636,6 +1650,62 @@ def _generate_entry_graph_view_cpp(*, cpp_apis: list[dict[str, Any]]) -> dict[st
     }
 
 
+def _generate_symbol_index_jsonl(
+    *,
+    cwd: Path,
+    module_files_view: dict[str, Any],
+    ignore: list[str],
+) -> list[dict[str, Any]]:
+    """
+    生成全仓符号索引（JSONL 逐行 record），目标：
+    - 每个函数/方法/类/全局变量都能定位到 file + range（行列）
+    - 每条记录标注 primary module（由 module_files 推导）
+    """
+    modules_obj = module_files_view.get("modules") if isinstance(module_files_view, dict) else None
+    if not isinstance(modules_obj, dict):
+        raise ValueError("module_files_view.modules 缺失或类型错误")
+
+    file_to_module: dict[str, str] = {}
+    for mid, m in modules_obj.items():
+        if not isinstance(mid, str) or not isinstance(m, dict):
+            continue
+        for f in (m.get("files") or []):
+            if isinstance(f, str) and f and f not in file_to_module:
+                file_to_module[f] = mid
+
+    def _is_ignored(rel: str) -> bool:
+        # ignore 是 glob 列表（来自 aise.yml），复用 path_match
+        try:
+            return any(match_glob(rel, pat) for pat in (ignore or []))
+        except Exception:
+            return False
+
+    records: list[dict[str, Any]] = []
+    # 对每个文件只解析一次
+    all_files = sorted(file_to_module.keys())
+    for rel in all_files:
+        if _is_ignored(rel):
+            continue
+        p = cwd / rel
+        if not p.exists() or not p.is_file():
+            continue
+        suffix = p.suffix.lower()
+        try:
+            if suffix == ".java":
+                syms = extract_java_symbols(repo_root=cwd, file_path=p, rel_file=rel)
+            elif suffix in (".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"):
+                syms = extract_cpp_symbols(repo_root=cwd, file_path=p, rel_file=rel)
+            else:
+                continue
+            mod = file_to_module.get(rel)
+            for s in syms:
+                records.append(s.to_json(module=mod))
+        except Exception:
+            # 解析失败不阻断 scan；由 validate/统计阶段再做约束
+            continue
+    return records
+
+
 def _llm_rewrite_filetree_view(
     *,
     cwd: Path,
@@ -2080,6 +2150,54 @@ def validate_views(cwd: Path) -> list[Finding]:
                     target=str(eg_path.relative_to(cwd)),
                     path="/" + "/".join(str(p) for p in err.path),
                     message=f"entry_graph.json schema 校验失败：{err.message}",
+                )
+            )
+
+    # symbol_index jsonl schema（逐行校验，采样前 N 行避免巨型仓库卡死）
+    si_path = root / "views/symbol_index.jsonl"
+    if si_path.exists():
+        schema = load_embedded_schema("views-symbol-index.schema.json")
+        validator = Draft202012Validator(schema, registry=reg)
+        try:
+            max_lines = 2000
+            with si_path.open("r", encoding="utf-8") as f:
+                for i, line in enumerate(f):
+                    if i >= max_lines:
+                        break
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        data = json.loads(line)
+                    except Exception as je:
+                        findings.append(
+                            Finding(
+                                rule_id="R-VIEW-008",
+                                severity="warn",
+                                target=str(si_path.relative_to(cwd)),
+                                path=f"/line/{i+1}",
+                                message=f"symbol_index.jsonl 第 {i+1} 行不是合法 JSON：{je}",
+                            )
+                        )
+                        continue
+                    for err in validator.iter_errors(data):
+                        findings.append(
+                            Finding(
+                                rule_id="R-VIEW-008",
+                                severity="warn",
+                                target=str(si_path.relative_to(cwd)),
+                                path=f"/line/{i+1}/" + "/".join(str(p) for p in err.path),
+                                message=f"symbol_index.jsonl schema 校验失败：{err.message}",
+                            )
+                        )
+        except Exception as e:
+            findings.append(
+                Finding(
+                    rule_id="R-VIEW-008",
+                    severity="warn",
+                    target=str(si_path.relative_to(cwd)),
+                    path="/",
+                    message=f"symbol_index.jsonl 读取/校验失败：{e}",
                 )
             )
 

@@ -65,6 +65,16 @@ autoPartitionFiletree: true
 - `aise scan` 会让 LLM **全量重写** `docs/codewiki/views/filetree.json`（模块边界规则）
 - 并据此刷新 `module_files/module_symbols/java_http_routes/entry_graph` 等视图，保证最终产物一致
 
+## 全仓符号索引（函数/全局变量可定位）
+
+`aise scan` 还会生成：
+- `docs/codewiki/views/symbol_index.jsonl`
+
+其中每一行是一条 symbol 记录（JSONL），包含：
+- `file + range`（行列范围）
+- `kind`（function/method/class/global_var…）
+- `module`（由 filetree best-match 推导的主归属模块）
+
 ## License
 
 MIT
