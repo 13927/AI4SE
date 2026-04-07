@@ -58,6 +58,10 @@ class AiseConfig:
         }
     )
     strict_layer_gate: bool = False
+    # Phase 6：全仓符号索引覆盖率门禁（接近 100% 覆盖）
+    # - True：validate 会对 roots 下的源码文件逐一检查 symbol_index 是否覆盖（缺失即 error）
+    # - False：仍会给出覆盖率统计与缺失样本（warn/info），但不阻断
+    strict_symbol_coverage: bool = False
     # 是否在 scan 阶段使用 LLM 自动重写 views/filetree.json（全自动治理：允许每次重写）
     # - None：自动（检测到可用模型配置则启用；否则关闭）
     # - True/False：强制开/关
@@ -108,6 +112,7 @@ def load_config(repo_root: Path) -> AiseConfig:
             if isinstance(k, str):
                 ldm[k] = _as_list(v)
     strict_layer = bool(raw.get("strictLayerGate") or raw.get("strict_layer_gate") or False)
+    strict_sym = bool(raw.get("strictSymbolCoverage") or raw.get("strict_symbol_coverage") or False)
     auto_part_raw = raw.get("autoPartitionFiletree")
     if auto_part_raw is None:
         auto_part_raw = raw.get("auto_partition_filetree")
@@ -128,5 +133,6 @@ def load_config(repo_root: Path) -> AiseConfig:
         agent_budgets=budgets,
         layer_dependency_matrix=ldm,
         strict_layer_gate=strict_layer,
+        strict_symbol_coverage=strict_sym,
         auto_partition_filetree=auto_part,
     )

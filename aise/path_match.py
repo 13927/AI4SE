@@ -22,3 +22,12 @@ class MatchRule:
             return re.search(self.value, p) is not None
         raise ValueError(f"未知 match.kind: {self.kind}")
 
+
+def match_glob(path: str, pattern: str) -> bool:
+    """
+    轻量 glob 匹配（用于 ignore / scopes 等），对路径分隔符做归一化。
+    注意：这里依赖 Python fnmatch 的行为（支持 * ? []，并把 / 当作普通字符处理）。
+    """
+    p = path.replace("\\", "/")
+    pat = pattern.replace("\\", "/")
+    return fnmatch.fnmatch(p, pat)

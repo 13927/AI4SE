@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import fnmatch
+import hashlib
 from dataclasses import dataclass
 from datetime import datetime
 import re
@@ -14,7 +15,7 @@ from referencing.jsonschema import DRAFT202012
 
 from .git_utils import changed_files, ensure_git, head_commit
 from .config import load_config
-from .path_match import MatchRule
+from .path_match import MatchRule, match_glob
 from .schema_loader import load_embedded_schema
 from .codewiki_templates import (
     default_l1_index,
@@ -638,7 +639,9 @@ def scan_repo(cwd: Path) -> None:
 
         # 全仓符号索引（JSONL）
         try:
-            recs = _generate_symbol_index_jsonl(cwd=cwd, module_files_view=mf, ignore=list(cfg.ignore or []))
+            recs = _generate_symbol_index_jsonl(
+                cwd=cwd, module_files_view=mf, roots=list(cfg.roots or ["src"]), ignore=list(cfg.ignore or [])
+            )
             (root / "views").mkdir(parents=True, exist_ok=True)
             out = root / "views/symbol_index.jsonl"
             with out.open("w", encoding="utf-8") as f:
@@ -1654,6 +1657,7 @@ def _generate_symbol_index_jsonl(
     *,
     cwd: Path,
     module_files_view: dict[str, Any],
+    roots: list[str],
     ignore: list[str],
 ) -> list[dict[str, Any]]:
     """
@@ -1673,6 +1677,11 @@ def _generate_symbol_index_jsonl(
             if isinstance(f, str) and f and f not in file_to_module:
                 file_to_module[f] = mid
 
+    # 也覆盖 unmapped_files（module 为空即可）
+    for f in (module_files_view.get("unmapped_files") or []):
+        if isinstance(f, str) and f and f not in file_to_module:
+            file_to_module[f] = ""
+
     def _is_ignored(rel: str) -> bool:
         # ignore 是 glob 列表（来自 aise.yml），复用 path_match
         try:
@@ -1680,9 +1689,31 @@ def _generate_symbol_index_jsonl(
         except Exception:
             return False
 
+    def _iter_source_files() -> list[str]:
+        exts = {".java", ".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"}
+        out: set[str] = set()
+        for r in (roots or ["src"]):
+            rp = cwd / r
+            if not rp.exists() or not rp.is_dir():
+                continue
+            for p in rp.rglob("*"):
+                if not p.is_file():
+                    continue
+                if p.suffix.lower() not in exts:
+                    continue
+                rel = str(p.relative_to(cwd)).replace("\\", "/")
+                if _is_ignored(rel):
+                    continue
+                out.add(rel)
+        # 兜底：把 module_files 出现过的文件也并进来（避免 roots 配置不全）
+        for rel in file_to_module.keys():
+            if _is_ignored(rel):
+                continue
+            out.add(rel)
+        return sorted(out)
+
     records: list[dict[str, Any]] = []
-    # 对每个文件只解析一次
-    all_files = sorted(file_to_module.keys())
+    all_files = _iter_source_files()
     for rel in all_files:
         if _is_ignored(rel):
             continue
@@ -1697,12 +1728,52 @@ def _generate_symbol_index_jsonl(
                 syms = extract_cpp_symbols(repo_root=cwd, file_path=p, rel_file=rel)
             else:
                 continue
-            mod = file_to_module.get(rel)
-            for s in syms:
-                records.append(s.to_json(module=mod))
+            mod = file_to_module.get(rel) or None
+            # 若该文件未抽到任何 symbol，也写入一个“文件级兜底记录”，保证可定位
+            if not syms:
+                try:
+                    txt = p.read_text(encoding="utf-8", errors="ignore")
+                    lines = txt.splitlines()
+                    end_line = max(1, len(lines))
+                    end_col = max(1, (len(lines[-1]) + 1) if lines else 1)
+                except Exception:
+                    end_line, end_col = 1, 1
+                rec = {
+                    "symbol_id": f"file:{hashlib.sha1(rel.encode('utf-8')).hexdigest()}",
+                    "kind": "other",
+                    "language": "java" if suffix == ".java" else "cpp",
+                    "name": rel,
+                    "file": rel,
+                    "signature": "no_symbols",
+                    "range": {"start_line": 1, "start_col": 1, "end_line": end_line, "end_col": end_col},
+                }
+                if mod:
+                    rec["module"] = mod
+                records.append(rec)
+            else:
+                for s in syms:
+                    records.append(s.to_json(module=mod))
         except Exception:
             # 解析失败不阻断 scan；由 validate/统计阶段再做约束
-            continue
+            try:
+                txt = p.read_text(encoding="utf-8", errors="ignore")
+                lines = txt.splitlines()
+                end_line = max(1, len(lines))
+                end_col = max(1, (len(lines[-1]) + 1) if lines else 1)
+            except Exception:
+                end_line, end_col = 1, 1
+            records.append(
+                (lambda _mod: (
+                    {"symbol_id": f"file:{hashlib.sha1(rel.encode('utf-8')).hexdigest()}",
+                     "kind": "other",
+                     "language": "java" if suffix == ".java" else "cpp",
+                     "name": rel,
+                     "file": rel,
+                     "signature": "parse_error",
+                     "range": {"start_line": 1, "start_col": 1, "end_line": end_line, "end_col": end_col},
+                     **({"module": _mod} if _mod else {})}
+                ))(file_to_module.get(rel) or None)
+            )
     return records
 
 
@@ -2048,6 +2119,7 @@ def update_repo(cwd: Path, base: str, head: str) -> set[str]:
 def validate_views(cwd: Path) -> list[Finding]:
     root = cwd / CODEWIKI_DIR
     findings: list[Finding] = []
+    cfg = load_config(cwd)
 
     # registry：用于解析 common.schema.json 的 $ref（避免网络检索）
     common = load_embedded_schema("common.schema.json")
@@ -2200,6 +2272,93 @@ def validate_views(cwd: Path) -> list[Finding]:
                     message=f"symbol_index.jsonl 读取/校验失败：{e}",
                 )
             )
+
+        # 覆盖率校验：roots 下的源码文件必须在 symbol_index 里出现（接近 100%）
+        # 注意：对巨型仓库这一步可能较慢；可用 aise.yml strictSymbolCoverage 控制严重级别。
+        exts = {".java", ".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"}
+
+        def _is_ignored(rel: str) -> bool:
+            try:
+                return any(match_glob(rel, pat) for pat in (cfg.ignore or []))
+            except Exception:
+                return False
+
+        expected: set[str] = set()
+        for r in (cfg.roots or ["src"]):
+            rp = cwd / r
+            if not rp.exists() or not rp.is_dir():
+                continue
+            for p in rp.rglob("*"):
+                if not p.is_file():
+                    continue
+                if p.suffix.lower() not in exts:
+                    continue
+                rel = str(p.relative_to(cwd)).replace("\\", "/")
+                if _is_ignored(rel):
+                    continue
+                expected.add(rel)
+
+        # 兜底：把 module_files 中出现过的文件也纳入覆盖率集合（适配非 src 根的仓库）
+        if mf_path.exists():
+            try:
+                mf = _read_json(mf_path)
+                mods = mf.get("modules") if isinstance(mf, dict) else None
+                if isinstance(mods, dict):
+                    for m in mods.values():
+                        if not isinstance(m, dict):
+                            continue
+                        for f2 in (m.get("files") or []):
+                            if isinstance(f2, str) and f2 and not _is_ignored(f2):
+                                if Path(f2).suffix.lower() in exts:
+                                    expected.add(f2)
+                for f2 in (mf.get("unmapped_files") or []):
+                    if isinstance(f2, str) and f2 and not _is_ignored(f2):
+                        if Path(f2).suffix.lower() in exts:
+                            expected.add(f2)
+            except Exception:
+                pass
+
+        covered: set[str] = set()
+        try:
+            with si_path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                    except Exception:
+                        continue
+                    if isinstance(obj, dict) and isinstance(obj.get("file"), str):
+                        covered.add(obj["file"])
+        except Exception:
+            pass
+
+        if expected:
+            missing = sorted(expected - covered)
+            coverage = 1.0 - (len(missing) / max(1, len(expected)))
+            findings.append(
+                Finding(
+                    rule_id="R-SYM-000",
+                    severity="info",
+                    target=str(si_path.relative_to(cwd)),
+                    path="/",
+                    message=f"symbol_index 覆盖率：{coverage*100:.2f}%（covered={len(expected)-len(missing)}/{len(expected)}）",
+                )
+            )
+            if missing:
+                sev = "error" if cfg.strict_symbol_coverage else "warn"
+                sample = ", ".join(missing[:20])
+                findings.append(
+                    Finding(
+                        rule_id="R-SYM-001",
+                        severity=sev,
+                        target=str(si_path.relative_to(cwd)),
+                        path="/",
+                        message=f"symbol_index 未覆盖 roots 下 {len(missing)} 个源码文件（示例：{sample}）",
+                        suggestion="检查 roots/ignore 配置；或排查 tree-sitter 解析失败导致未写入记录。",
+                    )
+                )
 
     return findings
 
