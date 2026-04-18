@@ -69,11 +69,49 @@ autoPartitionFiletree: true
 
 `aise scan` 还会生成：
 - `docs/codewiki/views/symbol_index.jsonl`
+- `docs/codewiki/views/symbol_index.summary.json`（统计摘要，便于门禁与回归）
 
 其中每一行是一条 symbol 记录（JSONL），包含：
 - `file + range`（行列范围）
 - `kind`（function/method/class/global_var…）
 - `module`（由 filetree best-match 推导的主归属模块）
+
+## Architecture (high level)
+
+```
+Raw source repo (read-only)
+  ├─ source code / build files
+  └─ aise.yml (policy/config)
+        ↓ scan (compile)
+CodeWiki (generated artifacts)
+  ├─ views/              # evidence & navigation (machine-first)
+  │   ├─ filetree.json
+  │   ├─ module_files.json
+  │   ├─ entry_graph.json
+  │   └─ symbol_index.jsonl (+ summary.json)
+  ├─ L1/                 # structured facts (auditable)
+  └─ L2/ + HUMAN_OVERVIEW/WIKI.md (optional, LLM-assisted)
+```
+
+## Guarantees (what you can validate)
+
+- **Symbol-level locatability (Java/C++)**: every symbol record carries `file + range` (1-based line/col).
+- **Coverage gate**: `aise validate` reports coverage for source files under `roots` and can enforce it:
+  - `strictSymbolCoverage: true` → missing source files become errors
+  - `strictSymbolParseErrors: true` → any `parse_error` fallback records become errors
+  - `strictSymbolNoSymbols: true` → any `no_symbols` fallback records become errors
+
+## What does “reference-level” mean?
+
+Symbol-level answers: “where is this function/global/class (file + range)?”
+
+**Reference-level** goes one step further: “how is this symbol used?”
+Typical reference edges (with evidence) include:
+- Java: method call edges, type reference edges, DI wiring evidence (already partially covered by `java_http_routes`)
+- C++: include edges, symbol references, and build target link edges (CMake)
+
+In practice, reference-level is not “full callgraph everywhere” by default; it is a set of **auditable edges** that you can generate
+incrementally (focus on critical entrypoints or changed modules) and validate with `file:range` evidence.
 
 ## License
 

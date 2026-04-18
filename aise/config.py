@@ -62,6 +62,11 @@ class AiseConfig:
     # - True：validate 会对 roots 下的源码文件逐一检查 symbol_index 是否覆盖（缺失即 error）
     # - False：仍会给出覆盖率统计与缺失样本（warn/info），但不阻断
     strict_symbol_coverage: bool = False
+    # Phase 6：符号索引质量门禁（更严格的“符号级可定位”）
+    # - strict_symbol_parse_errors=True：若 symbol_index 中存在 parse_error 兜底记录则 error
+    # - strict_symbol_no_symbols=True：若 symbol_index 中存在 no_symbols 兜底记录则 error
+    strict_symbol_parse_errors: bool = False
+    strict_symbol_no_symbols: bool = False
     # 是否在 scan 阶段使用 LLM 自动重写 views/filetree.json（全自动治理：允许每次重写）
     # - None：自动（检测到可用模型配置则启用；否则关闭）
     # - True/False：强制开/关
@@ -113,6 +118,8 @@ def load_config(repo_root: Path) -> AiseConfig:
                 ldm[k] = _as_list(v)
     strict_layer = bool(raw.get("strictLayerGate") or raw.get("strict_layer_gate") or False)
     strict_sym = bool(raw.get("strictSymbolCoverage") or raw.get("strict_symbol_coverage") or False)
+    strict_sym_parse = bool(raw.get("strictSymbolParseErrors") or raw.get("strict_symbol_parse_errors") or False)
+    strict_sym_nosym = bool(raw.get("strictSymbolNoSymbols") or raw.get("strict_symbol_no_symbols") or False)
     auto_part_raw = raw.get("autoPartitionFiletree")
     if auto_part_raw is None:
         auto_part_raw = raw.get("auto_partition_filetree")
@@ -134,5 +141,7 @@ def load_config(repo_root: Path) -> AiseConfig:
         layer_dependency_matrix=ldm,
         strict_layer_gate=strict_layer,
         strict_symbol_coverage=strict_sym,
+        strict_symbol_parse_errors=strict_sym_parse,
+        strict_symbol_no_symbols=strict_sym_nosym,
         auto_partition_filetree=auto_part,
     )

@@ -647,6 +647,44 @@ def scan_repo(cwd: Path) -> None:
             with out.open("w", encoding="utf-8") as f:
                 for r in recs:
                     f.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+            # 统计摘要（用于门禁/回归；避免消费巨型 JSONL）
+            summary: dict[str, Any] = {
+                "kind": "view.symbol_index.summary",
+                "version": "0.1",
+                "generated_at": datetime.utcnow().isoformat() + "Z",
+                "total_records": 0,
+                "counts_by_language": {},
+                "counts_by_kind": {},
+                "counts_by_module": {},
+                "files_covered": 0,
+                "parse_error_records": 0,
+                "no_symbols_records": 0,
+            }
+            files_seen: set[str] = set()
+            for r in recs:
+                if not isinstance(r, dict):
+                    continue
+                summary["total_records"] += 1
+                lang = str(r.get("language") or "")
+                k = str(r.get("kind") or "")
+                mod = str(r.get("module") or "")
+                if lang:
+                    summary["counts_by_language"][lang] = int(summary["counts_by_language"].get(lang, 0)) + 1
+                if k:
+                    summary["counts_by_kind"][k] = int(summary["counts_by_kind"].get(k, 0)) + 1
+                if mod:
+                    summary["counts_by_module"][mod] = int(summary["counts_by_module"].get(mod, 0)) + 1
+                f2 = r.get("file")
+                if isinstance(f2, str) and f2:
+                    files_seen.add(f2)
+                sig = str(r.get("signature") or "")
+                if sig == "parse_error":
+                    summary["parse_error_records"] += 1
+                if sig == "no_symbols":
+                    summary["no_symbols_records"] += 1
+            summary["files_covered"] = len(files_seen)
+            write_json(root / "views/symbol_index.summary.json", summary)
         except Exception as si_e:
             (root / "views/symbol_index.error.txt").write_text(str(si_e), encoding="utf-8")
 
@@ -2359,6 +2397,38 @@ def validate_views(cwd: Path) -> list[Finding]:
                         suggestion="检查 roots/ignore 配置；或排查 tree-sitter 解析失败导致未写入记录。",
                     )
                 )
+
+        # 读取 summary，做更严格的“符号级”门禁（parse_error/no_symbols）
+        sum_path = root / "views/symbol_index.summary.json"
+        if sum_path.exists():
+            try:
+                s = _read_json(sum_path)
+                pe = int((s.get("parse_error_records") or 0) if isinstance(s, dict) else 0)
+                ns = int((s.get("no_symbols_records") or 0) if isinstance(s, dict) else 0)
+                if pe > 0:
+                    findings.append(
+                        Finding(
+                            rule_id="R-SYM-002",
+                            severity="error" if cfg.strict_symbol_parse_errors else "warn",
+                            target=str(sum_path.relative_to(cwd)),
+                            path="/parse_error_records",
+                            message=f"symbol_index 存在 parse_error 兜底记录：{pe}",
+                            suggestion="优先修复 tree-sitter 解析失败（编码/超大文件/语法不兼容），或将特定路径加入 ignore。",
+                        )
+                    )
+                if ns > 0:
+                    findings.append(
+                        Finding(
+                            rule_id="R-SYM-003",
+                            severity="error" if cfg.strict_symbol_no_symbols else "warn",
+                            target=str(sum_path.relative_to(cwd)),
+                            path="/no_symbols_records",
+                            message=f"symbol_index 存在 no_symbols 兜底记录：{ns}",
+                            suggestion="若你要求每个源码文件都必须有至少一个函数/全局变量，请排查空文件/仅声明文件，或将其加入 ignore。",
+                        )
+                    )
+            except Exception:
+                pass
 
     return findings
 
